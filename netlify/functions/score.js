@@ -13,25 +13,27 @@ exports.handler = async function(event) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_KEY}`,
-        'HTTP-Referer': 'https://arbor-ir-tool.netlify.app',
+        'HTTP-Referer': 'https://whimsical-cascaron-1b6279.netlify.app',
         'X-Title': 'Arbor IR Assessment'
       },
       body: JSON.stringify({
-        model:'openrouter/free',
+        model: 'openrouter/free',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 1200,
         temperature: 0.3
       })
     });
 
-    const data = await response.json();
+    const raw = await response.text();
+    
+    let data;
+    try { data = JSON.parse(raw); } 
+    catch(e) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'Bad JSON from OpenRouter: ' + raw.slice(0, 300) }) };
+    }
 
     if (!data.choices || !data.choices[0]) {
-      const errDetail = data.error ? data.error.message : JSON.stringify(data);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: errDetail })
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: data.error ? data.error.message : JSON.stringify(data).slice(0, 300) }) };
     }
 
     return {
