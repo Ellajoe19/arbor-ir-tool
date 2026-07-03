@@ -17,7 +17,7 @@ exports.handler = async function(event) {
         'X-Title': 'Arbor IR Assessment'
       },
       body: JSON.stringify({
-        model:'meta-llama/llama-3.2-1b-instruct:free',
+        model:'openrouter/free',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 1200,
         temperature: 0.3
