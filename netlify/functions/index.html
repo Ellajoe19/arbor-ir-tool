@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Arbor — IR Assessment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<!-- Libraries for file parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#080A0F;--surface:#0C0F17;--panel:#10141F;--panel2:#141926;
+  --border:#1A2035;--border2:#222840;--muted:#3D4A6B;--dim:#6B7A9E;
+  --body:#9BA8C4;--white:#F0F4FF;
+  --jade:#00C9A7;--jade-dim:rgba(0,201,167,0.12);--jade-border:rgba(0,201,167,0.25);
+  --amber:#E8A832;--amber-dim:rgba(232,168,50,0.12);
+  --red:#E25C5C;--red-dim:rgba(226,92,92,0.12);
+  --purple:#9B7CE8;--purple-dim:rgba(155,124,232,0.12);--purple-border:rgba(155,124,232,0.25);
+  --dg:'Space Grotesk',sans-serif;--db:'DM Sans',sans-serif;
+}
+body{background:var(--black);color:var(--body);font-family:var(--db);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;padding:2.5rem 1.5rem 5rem}
+.wrap{max-width:780px;margin:0 auto}
+
+header{margin-bottom:2.5rem}
+.logo{font-family:var(--dg);font-weight:700;font-size:1.2rem;color:var(--white);letter-spacing:-0.02em;margin-bottom:0.4rem}
+.logo em{color:var(--jade);font-style:normal}
+.eyebrow{font-size:0.7rem;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:var(--jade);margin-bottom:0.5rem}
+h1{font-family:var(--dg);font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;color:var(--white);letter-spacing:-0.02em;margin-bottom:0.5rem}
+.sub{font-size:0.85rem;color:var(--dim);max-width:520px;line-height:1.7}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:1.6rem;margin-bottom:1.25rem}
+
+.meta-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.meta-row:last-child{margin-bottom:0}
+.f{display:flex;flex-direction:column;gap:0.35rem}
+.f label{font-size:0.73rem;color:var(--muted);font-weight:500}
+.f input,.f select{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  color:var(--white);font-family:var(--db);font-size:0.85rem;
+  padding:0.6rem 0.85rem;outline:none;transition:border-color .2s;-webkit-appearance:none;
+}
+.f input:focus,.f select:focus{border-color:var(--jade-border)}
+.f select option{background:var(--panel)}
+
+/* File Upload Area */
+.upload-section{margin-bottom:1.25rem}
+.upload-label{font-family:var(--dg);font-size:0.95rem;font-weight:600;color:var(--white);margin-bottom:0.4rem;display:block}
+.upload-hint{font-size:0.78rem;color:var(--muted);margin-bottom:1rem}
+
+.drop-zone{
+  border:2px dashed var(--border2);border-radius:14px;
+  padding:2.5rem 2rem;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;position:relative;
+  background:var(--surface);
+}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--jade-border);background:var(--jade-dim)}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:2rem;margin-bottom:0.75rem;display:block}
+.drop-title{font-family:var(--dg);font-size:0.9rem;font-weight:600;color:var(--white);margin-bottom:0.3rem}
+.drop-sub{font-size:0.75rem;color:var(--muted)}
+.drop-types{
+  display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:0.75rem;
+}
+.type-tag{
+  font-size:0.65rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+  padding:0.2rem 0.5rem;border-radius:4px;
+  background:var(--panel);border:1px solid var(--border2);color:var(--muted);
+}
+
+.file-preview{
+  display:none;background:var(--jade-dim);border:1px solid var(--jade-border);
+  border-radius:10px;padding:1rem 1.25rem;margin-top:0.75rem;
+}
+.file-preview.show{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.file-info{display:flex;align-items:center;gap:0.75rem}
+.file-icon{font-size:1.3rem}
+.file-name{font-family:var(--dg);font-size:0.85rem;font-weight:600;color:var(--white)}
+.file-size{font-size:0.72rem;color:var(--dim)}
+.file-remove{
+  background:transparent;border:1px solid var(--border2);color:var(--muted);
+  font-size:0.72rem;padding:0.25rem 0.6rem;border-radius:5px;cursor:pointer;
+  transition:all .2s;font-family:var(--dg);
+}
+.file-remove:hover{border-color:var(--red);color:var(--red)}
+
+.extract-status{font-size:0.75rem;color:var(--jade);margin-top:0.5rem;display:none}
+.extract-status.show{display:block}
+
+/* Also keep a transcript paste option */
+.or-divider{display:flex;align-items:center;gap:1rem;margin:1rem 0;color:var(--muted);font-size:0.75rem}
+.or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+textarea.main{
+  width:100%;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;color:var(--white);font-family:var(--db);font-size:0.83rem;
+  padding:1rem;outline:none;resize:vertical;min-height:120px;line-height:1.7;
+  transition:border-color .2s;
+}
+textarea.main:focus{border-color:var(--jade-border)}
+textarea.main::placeholder{color:var(--muted)}
+
+.analyze-btn{
+  width:100%;background:var(--jade);color:var(--black);
+  font-family:var(--dg);font-weight:700;font-size:0.92rem;
+  padding:0.95rem;border:none;border-radius:10px;cursor:pointer;
+  transition:opacity .2s;margin:0.5rem 0 2.5rem;
+  display:flex;align-items:center;justify-content:center;gap:0.6rem;
+}
+.analyze-btn:hover{opacity:0.88}
+.analyze-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+.status-bar{
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:1rem 1.25rem;margin-bottom:1rem;font-size:0.82rem;color:var(--dim);
+  display:none;align-items:center;gap:0.75rem;
+}
+.status-bar.show{display:flex}
+.spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--jade);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-msg{background:var(--red-dim);border:1px solid rgba(226,92,92,0.25);border-radius:10px;padding:1rem 1.25rem;font-size:0.82rem;color:var(--red);margin-bottom:1rem;display:none}
+
+/* RESULT */
+#result{display:none}
+#result.show{display:block}
+
+.result-header{background:var(--panel);border:1px solid var(--jade-border);border-radius:16px;padding:2rem;margin-bottom:1.25rem}
+.result-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem}
+.r-name{font-family:var(--dg);font-size:1.3rem;font-weight:700;color:var(--white)}
+.r-meta{font-size:0.8rem;color:var(--dim);margin-top:0.2rem}
+.overall-wrap{text-align:right}
+.overall-num{font-family:var(--dg);font-size:2.8rem;font-weight:700;line-height:1}
+.overall-lbl{font-size:0.68rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-top:0.2rem}
+.verdict-tag{display:inline-block;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:0.28rem 0.7rem;border-radius:6px;margin-bottom:1.5rem}
+.v-ready{background:var(--jade-dim);color:var(--jade);border:1px solid var(--jade-border)}
+.v-prep{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(232,168,50,0.25)}
+.v-notyet{background:var(--red-dim);color:var(--red);border:1px solid rgba(226,92,92,0.25)}
+
+.dim-results{display:flex;flex-direction:column;gap:1.1rem;margin-bottom:1.75rem}
+.dim-result-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem}
+.dim-result-name{font-size:0.82rem;font-weight:500;color:var(--white)}
+.dim-result-score{font-family:var(--dg);font-size:0.9rem;font-weight:700}
+.bar-track{height:5px;background:var(--border2);border-radius:3px;overflow:hidden;margin-bottom:0.4rem}
+.bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.dim-reasoning{font-size:0.76rem;color:var(--muted);line-height:1.6}
+
+.gap-section{border-top:1px solid var(--border);padding-top:1.5rem}
+.gap-title{font-family:var(--dg);font-size:0.85rem;font-weight:700;color:var(--white);margin-bottom:0.85rem}
+.gap-item{display:flex;gap:0.6rem;font-size:0.79rem;color:var(--dim);margin-bottom:0.65rem;line-height:1.55}
+.gap-dot{color:var(--amber);flex-shrink:0}
+.no-gaps{font-size:0.79rem;color:var(--muted)}
+
+.presence-card{background:var(--panel);border:1px solid var(--purple-border);border-radius:14px;padding:1.6rem;margin-bottom:1.25rem}
+.presence-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem}
+.presence-title{font-family:var(--dg);font-size:0.95rem;font-weight:700;color:var(--white)}
+.presence-badge{font-size:0.68rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:0.25rem 0.65rem;border-radius:6px}
+.pb-strong{background:var(--jade-dim);color:var(--jade);border:1px solid var(--jade-border)}
+.pb-moderate{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple-border)}
+.pb-weak{background:var(--red-dim);color:var(--red);border:1px solid rgba(226,92,92,0.25)}
+.presence-body{font-size:0.8rem;color:var(--dim);line-height:1.65}
+.presence-upsell{margin-top:0.75rem;font-size:0.78rem;color:var(--purple)}
+
+.source-used{font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;font-style:italic}
+
+.actions{display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem}
+.action-btn{font-family:var(--dg);font-size:0.78rem;font-weight:600;padding:0.6rem 1.1rem;border-radius:8px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--body);transition:all .2s}
+.action-btn:hover{border-color:var(--jade-border);color:var(--white)}
+
+@media(max-width:580px){.meta-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Arb<em>or</em></div>
+    <div class="eyebrow">Internal Tool</div>
+    <h1>IR Assessment Scorer</h1>
+    <p class="sub">Upload a pitch deck or paste a meeting transcript. The tool reads the file and scores the founder automatically.</p>
+  </header>
+
+  <div class="card">
+    <div class="meta-row">
+      <div class="f"><label>Founder Name</label><input type="text" id="founderName" placeholder="Jane Smith"/></div>
+      <div class="f"><label>Company</label><input type="text" id="companyName" placeholder="Acme Inc."/></div>
+    </div>
+    <div class="meta-row">
+      <div class="f">
+        <label>Stage</label>
+        <select id="stage">
+          <option>Pre-seed</option><option>Seed</option>
+          <option>Series A</option><option>Series B+</option>
+        </select>
+      </div>
+      <div class="f"><label>Reviewed By</label><input type="text" id="reviewer" placeholder="Your name"/></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="upload-section">
+      <label class="upload-label">Upload Pitch Deck</label>
+      <div class="upload-hint">PDF, PPTX, or DOCX. The file stays in your browser — nothing is sent anywhere except the extracted text going to the AI for scoring.</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".pdf,.pptx,.docx" onchange="handleFile(this.files[0])"/>
+        <span class="drop-icon">📎</span>
+        <div class="drop-title">Drop file here or click to browse</div>
+        <div class="drop-sub">Pitch deck, one-pager, anything that describes the company</div>
+        <div class="drop-types">
+          <span class="type-tag">PDF</span>
+          <span class="type-tag">PPTX</span>
+          <span class="type-tag">DOCX</span>
+        </div>
+      </div>
+      <div class="file-preview" id="filePreview">
+        <div class="file-info">
+          <div class="file-icon" id="fileIcon">📄</div>
+          <div>
+            <div class="file-name" id="fileName">—</div>
+            <div class="file-size" id="fileSize">—</div>
+          </div>
+        </div>
+        <button class="file-remove" onclick="clearFile()">Remove</button>
+      </div>
+      <div class="extract-status" id="extractStatus"></div>
+    </div>
+
+    <div class="or-divider">or add meeting transcript</div>
+
+    <textarea class="main" id="transcriptText" placeholder="Paste the meeting transcript here if you have one — the tool will use both the file and the transcript together for a more complete score."></textarea>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="status-bar" id="statusBar">
+    <div class="spinner"></div>
+    <span id="statusText">Reading file...</span>
+  </div>
+
+  <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()">Run IR Assessment</button>
+
+  <div id="result">
+    <div class="result-header">
+      <div class="result-top">
+        <div>
+          <div class="r-name" id="rName">—</div>
+          <div class="r-meta" id="rMeta">—</div>
+        </div>
+        <div class="overall-wrap">
+          <div class="overall-num" id="rOverall">—</div>
+          <div class="overall-lbl">Core IR Score</div>
+        </div>
+      </div>
+      <div class="verdict-tag" id="rVerdict">—</div>
+      <div class="source-used" id="rSource">—</div>
+      <div class="dim-results" id="rDims"></div>
+      <div class="gap-section">
+        <div class="gap-title">Flagged Gaps</div>
+        <div id="rGaps"></div>
+      </div>
+    </div>
+
+    <div class="presence-card">
+      <div class="presence-head">
+        <div class="presence-title">Public Presence</div>
+        <div class="presence-badge" id="rPresenceBadge">—</div>
+      </div>
+      <div class="presence-body" id="rPresenceBody">—</div>
+      <div class="presence-upsell" id="rPresenceUpsell"></div>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn" onclick="copyReport()">Copy as Text</button>
+      <button class="action-btn" onclick="window.print()">Print / Save PDF</button>
+      <button class="action-btn" onclick="resetAll()">New Assessment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let extractedFileText = '';
+let currentFile = null;
+
+// Drag and drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+function getFileIcon(name) {
+  if (name.endsWith('.pdf')) return '📕';
+  if (name.endsWith('.pptx')) return '📊';
+  if (name.endsWith('.docx')) return '📝';
+  return '📄';
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  const allowed = ['.pdf','.pptx','.docx'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!allowed.includes(ext)) { showError('Only PDF, PPTX, and DOCX files are supported.'); return; }
+
+  currentFile = file;
+  hideError();
+  extractedFileText = '';
+
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatSize(file.size);
+  document.getElementById('fileIcon').textContent = getFileIcon(file.name);
+  document.getElementById('filePreview').classList.add('show');
+
+  const statusEl = document.getElementById('extractStatus');
+  statusEl.textContent = 'Reading file...';
+  statusEl.classList.add('show');
+
+  try {
+    if (ext === '.pdf') extractedFileText = await extractPDF(file);
+    else if (ext === '.docx') extractedFileText = await extractDOCX(file);
+    else if (ext === '.pptx') extractedFileText = await extractPPTX(file);
+
+    if (!extractedFileText.trim()) {
+      statusEl.textContent = 'Could not extract text from this file — it may be image-based. Try a different version.';
+      statusEl.style.color = 'var(--red)';
+    } else {
+      const wordCount = extractedFileText.split(/\s+/).filter(Boolean).length;
+      statusEl.textContent = `File read successfully — ${wordCount.toLocaleString()} words extracted.`;
+      statusEl.style.color = 'var(--jade)';
+    }
+  } catch(err) {
+    statusEl.textContent = 'Error reading file: ' + err.message;
+    statusEl.style.color = 'var(--red)';
+    console.error(err);
+  }
+}
+
+async function extractPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(item => item.str).join(' ') + '\n';
+  }
+  return text;
+}
+
+async function extractDOCX(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
+}
+
+async function extractPPTX(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  let text = '';
+  const slideFiles = Object.keys(zip.files).filter(n => n.match(/^ppt\/slides\/slide\d+\.xml$/)).sort((a,b) => {
+    const na = parseInt(a.match(/\d+/)[0]);
+    const nb = parseInt(b.match(/\d+/)[0]);
+    return na - nb;
+  });
+
+  for (const slidePath of slideFiles) {
+    const xml = await zip.files[slidePath].async('string');
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'text/xml');
+    const textNodes = doc.getElementsByTagName('a:t');
+    let slideText = '';
+    for (const node of textNodes) { slideText += node.textContent + ' '; }
+    if (slideText.trim()) text += slideText.trim() + '\n\n';
+  }
+  return text;
+}
+
+function clearFile() {
+  currentFile = null;
+  extractedFileText = '';
+  document.getElementById('filePreview').classList.remove('show');
+  document.getElementById('extractStatus').classList.remove('show');
+  document.getElementById('fileInput').value = '';
+}
+
+function scoreColor(val) {
+  if (val >= 70) return '#00C9A7';
+  if (val >= 45) return '#E8A832';
+  return '#E25C5C';
+}
+
+async function runAnalysis() {
+  const transcript = document.getElementById('transcriptText').value.trim();
+  const name = document.getElementById('founderName').value || 'Unnamed Founder';
+  const company = document.getElementById('companyName').value || 'Unnamed Company';
+  const stage = document.getElementById('stage').value;
+  const reviewer = document.getElementById('reviewer').value || 'Unspecified';
+
+  const combined = [extractedFileText, transcript].filter(Boolean).join('\n\n---\n\n');
+  if (!combined.trim()) { showError('Upload a pitch deck or paste a transcript first.'); return; }
+  if (combined.length < 100) { showError('Not enough content to score from.'); return; }
+
+  hideError();
+  setLoading(true, 'Scoring founder...');
+
+  const sourceDesc = [
+    extractedFileText ? (currentFile ? currentFile.name : 'uploaded file') : null,
+    transcript ? 'meeting transcript' : null
+  ].filter(Boolean).join(' + ');
+
+  const prompt = `You are a senior fundraising advisor at Arbor, a startup advisory firm. You have been given content from a founder — a pitch deck, a meeting transcript, or both. Score this founder across 7 core readiness dimensions and assess their public presence as a separate flag.
+
+Score each from 0 to 100 based only on what is actually in the content. Be direct and specific — pull real details from the content in your reasoning. If a dimension cannot be assessed from the content, score it 35 and say so clearly.
+
+Founder: ${name}
+Company: ${company}
+Stage: ${stage}
+
+Content:
+---
+${combined.slice(0, 7000)}
+---
+
+Respond ONLY with valid JSON, no other text:
+{
+  "dimensions": [
+    {"key":"team","name":"Team & Execution","score":0-100,"reasoning":"specific 1-2 sentences"},
+    {"key":"market","name":"Market Opportunity","score":0-100,"reasoning":"..."},
+    {"key":"traction","name":"Traction & Metrics","score":0-100,"reasoning":"..."},
+    {"key":"financials","name":"Financials & Unit Economics","score":0-100,"reasoning":"..."},
+    {"key":"legal","name":"Legal & Cap Table","score":0-100,"reasoning":"..."},
+    {"key":"narrative","name":"Narrative Clarity","score":0-100,"reasoning":"..."},
+    {"key":"materials","name":"Materials Readiness","score":0-100,"reasoning":"..."}
+  ],
+  "presence":{
+    "status":"strong|moderate|weak",
+    "reasoning":"what the content reveals about their online visibility",
+    "upsell":true|false
+  }
+}`;
+
+  try {
+    const response = await fetch('/.netlify/functions/score', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ prompt })
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      showError('Error from AI: ' + (data.error || 'Unknown error'));
+      setLoading(false); return;
+    }
+    const raw = data.result;
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    renderReport(parsed, name, company, stage, reviewer, sourceDesc);
+  } catch(err) {
+    showError('Something went wrong. Try again.');
+    console.error(err);
+  }
+
+  setLoading(false);
+}
+
+function renderReport(data, name, company, stage, reviewer, sourceDesc) {
+  const dims = data.dimensions;
+  const total = dims.reduce((s,d)=>s+d.score,0);
+  const overall = Math.round(total/dims.length);
+
+  document.getElementById('rName').textContent = name;
+  document.getElementById('rMeta').textContent = `${company} · ${stage} · Reviewed by ${reviewer}`;
+  document.getElementById('rOverall').textContent = overall;
+  document.getElementById('rOverall').style.color = scoreColor(overall);
+  document.getElementById('rSource').textContent = `Scored from: ${sourceDesc}`;
+
+  const vMap = [[70,'v-ready','Investor Ready'],[45,'v-prep','Needs Preparation'],[0,'v-notyet','Not Yet Ready']];
+  const v = vMap.find(([t]) => overall >= t);
+  document.getElementById('rVerdict').className = 'verdict-tag ' + v[1];
+  document.getElementById('rVerdict').textContent = v[2];
+
+  let dimsHtml = '', gapsHtml = '', hasGaps = false;
+  dims.forEach(d => {
+    const c = scoreColor(d.score);
+    dimsHtml += `<div><div class="dim-result-top"><div class="dim-result-name">${d.name}</div><div class="dim-result-score" style="color:${c}">${d.score}</div></div><div class="bar-track"><div class="bar-fill" style="width:${d.score}%;background:${c}"></div></div><div class="dim-reasoning">${d.reasoning}</div></div>`;
+    if (d.score < 60) { hasGaps=true; gapsHtml+=`<div class="gap-item"><span class="gap-dot">●</span><span><b style="color:#fff">${d.name}</b> — ${d.reasoning}</span></div>`; }
+  });
+
+  document.getElementById('rDims').innerHTML = dimsHtml;
+  document.getElementById('rGaps').innerHTML = hasGaps ? gapsHtml : '<div class="no-gaps">No major gaps flagged.</div>';
+
+  const p = data.presence;
+  const bMap = {strong:['pb-strong','Strong'],moderate:['pb-moderate','Could Use Support'],weak:['pb-weak','Needs Work']};
+  const [bc,bt] = bMap[p.status]||bMap.weak;
+  document.getElementById('rPresenceBadge').className='presence-badge '+bc;
+  document.getElementById('rPresenceBadge').textContent=bt;
+  document.getElementById('rPresenceBody').textContent=p.reasoning;
+  document.getElementById('rPresenceUpsell').textContent=p.upsell?'Strong candidate for the LinkedIn content / IR newsletter service.':'';
+
+  document.getElementById('result').classList.add('show');
+  document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}
+
+function setLoading(on, msg='') {
+  document.getElementById('analyzeBtn').disabled = on;
+  const bar = document.getElementById('statusBar');
+  bar.classList.toggle('show', on);
+  if (msg) document.getElementById('statusText').textContent = msg;
+}
+
+function showError(msg) { const el=document.getElementById('errorMsg'); el.textContent=msg; el.style.display='block'; }
+function hideError() { document.getElementById('errorMsg').style.display='none'; }
+
+function copyReport() {
+  const name = document.getElementById('rName').textContent;
+  const meta = document.getElementById('rMeta').textContent;
+  const overall = document.getElementById('rOverall').textContent;
+  const verdict = document.getElementById('rVerdict').textContent;
+  let text = `ARBOR — IR ASSESSMENT\n\n${name}\n${meta}\n\nCore IR Score: ${overall}/100\nVerdict: ${verdict}\n\n`;
+  document.querySelectorAll('#rDims > div').forEach(el => {
+    const n=el.querySelector('.dim-result-name').textContent;
+    const s=el.querySelector('.dim-result-score').textContent;
+    const r=el.querySelector('.dim-reasoning').textContent;
+    text+=`${n}: ${s}/100\n${r}\n\n`;
+  });
+  text+=`PUBLIC PRESENCE:\n${document.getElementById('rPresenceBody').textContent}`;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=event.target; const orig=btn.textContent;
+    btn.textContent='Copied ✓'; setTimeout(()=>btn.textContent=orig,1500);
+  });
+}
+
+function resetAll() {
+  document.getElementById('result').classList.remove('show');
+  clearFile();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
